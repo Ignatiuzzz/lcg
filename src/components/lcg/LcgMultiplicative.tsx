@@ -59,7 +59,6 @@ export default function LcgMultiplicative() {
         const N_ = 2 ** (g_ - 2);                // período máximo
 
         let x = ((X0 % m_) + m_) % m_;
-        const xStart = x;
 
         // Ahora generamos hasta cerrar el primer ciclo: toGenerate = max(p, N) + 1
         // (capado por HARD_CAP_ROWS). Así garantizamos que X_{N+1} = X_0 se vea en la tabla.

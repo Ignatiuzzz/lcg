@@ -5,8 +5,8 @@ type Row = {
     i: number;
     xi: number;
     op: string;
-    result: number;
-    r: number;
+    result: number; // X_{i+1}
+    r: number;      // r_i = X_i/(m-1)
 };
 
 const HARD_CAP_ROWS = 8192;
@@ -31,6 +31,7 @@ export default function LcgLinear() {
     const [cStr, setCStr] = useState<string>("");
     const [pStr, setPStr] = useState<string>("");
     const [dStr, setDStr] = useState<string>("");
+
     const [a, setA] = useState<number | null>(null);
     const [g, setG] = useState<number | null>(null);
     const [m, setM] = useState<number | null>(null);
@@ -38,6 +39,7 @@ export default function LcgLinear() {
     const [rows, setRows] = useState<Row[]>([]);
     const [note, setNote] = useState<string>("");
     const [errors, setErrors] = useState<string[]>([]);
+    const [cycleTruncated, setCycleTruncated] = useState<boolean>(false);
 
     function handleGenerate() {
         const errs: string[] = [];
@@ -68,15 +70,16 @@ export default function LcgLinear() {
             return;
         }
 
-        if (cIn < 2 || !isPrime(cIn)) {
-            setErrors(["c debe ser primo y ≥ 2."]);
+        // Para m = 2^g, conviene c impar (coprimo con m). Mantengo tu requisito de primo, pero lo hago impar.
+        if (cIn < 3 || !isPrime(cIn) || cIn % 2 === 0) {
+            setErrors(["c debe ser primo impar y ≥ 3 (y coprimo con m)."]);
             return;
         }
 
-        const g_ = Math.ceil(Math.log(p) / Math.LN2);
+        // g tal que m = 2^g ≥ p (asegura que el período máximo N = m sea ≥ p)
+        const g_ = Math.max(1, Math.ceil(Math.log2(p)));
         const m_ = 2 ** g_;
-        const a_ = 1 + 4 * k;
-
+        const a_ = 1 + 4 * k; // a ≡ 1 (mod 4) → período máximo para m = 2^g si c es impar
         if (gcd(cIn, m_) !== 1) {
             setErrors([`c debe ser coprimo con m (= ${m_}). Para m = 2^g, usa un primo impar (c ≠ 2).`]);
             return;
@@ -84,26 +87,35 @@ export default function LcgLinear() {
 
         let x = ((seed % m_) + m_) % m_;
 
+        // Mostrar siempre hasta cerrar el ciclo: max(p, m) + 1 (capado)
+        const desired = Math.min(p, HARD_CAP_ROWS);
+        let target = Math.max(desired, m_) + 1;
+        let truncated = false;
+        if (target > HARD_CAP_ROWS) {
+            target = HARD_CAP_ROWS;
+            truncated = true;
+        }
+
         const out: Row[] = [];
-        const toGenerate = Math.min(p, HARD_CAP_ROWS) + 1; // p + 1 siempre
-        for (let i = 1; i <= toGenerate; i++) {
+        for (let i = 1; i <= target; i++) {
             const op = `(${a_} * ${x} + ${cIn}) MOD(${m_})`;
             const xNext = (a_ * x + cIn) % m_;
-            const r = (m_ > 1) ? xNext / (m_ - 1) : 0;
+            const r = (m_ > 1) ? x / (m_ - 1) : 0; // r_i = X_i/(m-1), coherente con el encabezado
             out.push({ i, xi: x, op, result: xNext, r });
             x = xNext;
         }
 
+        setCycleTruncated(truncated);
         setErrors([]);
         setA(a_); setG(g_); setM(m_); setC(cIn);
         setRows(out);
-        setNote(`D = ${D} decimales. Validado: X₀,k,p enteros (p>0); c primo≥2 y coprimo con m; g entero.`);
+        setNote(`D = ${D} decimales. Período teórico N = m = 2^g = ${m_}.`);
     }
 
     function handleClear() {
         setSeedStr(""); setKStr(""); setCStr(""); setPStr(""); setDStr("");
         setA(null); setG(null); setM(null); setC(null);
-        setRows([]); setNote(""); setErrors([]);
+        setRows([]); setNote(""); setErrors([]); setCycleTruncated(false);
     }
 
     const decimals = dStr && isNonNegIntStr(dStr) ? toInt(dStr) : 0;
@@ -149,7 +161,11 @@ export default function LcgLinear() {
                         &nbsp;&nbsp; g: <strong>{g}</strong>; m: <strong>{m}</strong>
                     </div>
 
-                    {note && <p style={{ color: "#8a6d1d", margin: "8px 0" }}>ℹ️ {note}</p>}
+                    {note && <p style={{ color: "#8a6d1d", margin: "8px 0" }}>ℹ️ {note}
+                        {cycleTruncated && <span style={{ marginLeft: 8, color: "#b33" }}>
+                            (Ciclo truncado por límite de {HARD_CAP_ROWS} filas)
+                        </span>}
+                    </p>}
 
                     <div className="table-wrap">
                         <table className="table">
